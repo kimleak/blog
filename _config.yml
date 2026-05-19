@@ -1,0 +1,15 @@
+title: "kimleak's blog"
+description: "Tech & AI, made simple."
+author: kimleak
+baseurl: "/blog"
+url: "https://kimleak.github.io"
+
+theme: minima
+minima:
+  skin: auto
+
+plugins:
+  - jekyll-seo-tag
+  - jekyll-feed
+
+permalink: /:year/:month/:day/:title/
