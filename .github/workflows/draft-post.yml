@@ -1,0 +1,90 @@
+name: Draft post from issue
+
+on:
+  issues:
+    types: [labeled]
+
+concurrency:
+  group: draft-post-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  draft:
+    # Only you can trigger this (public repo — protects your tokens)
+    if: github.event.label.name == 'new-post' && github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Today's date (KST)
+        id: date
+        run: echo "today=$(TZ=Asia/Seoul date +%F)" >> "$GITHUB_OUTPUT"
+
+      - name: Claude writes the draft
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # or: anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          prompt: |
+            Follow CLAUDE.md in this repo exactly.
+            Today's date is ${{ steps.date.outputs.today }}.
+
+            Write a new post for this request (GitHub issue #${{ github.event.issue.number }}):
+
+            Title of issue: ${{ github.event.issue.title }}
+
+            ${{ github.event.issue.body }}
+          claude_args: >-
+            --allowedTools "Read,Write,Edit,Glob,Grep"
+            --max-turns 30
+
+      - name: Check the post
+        id: check
+        run: |
+          f=$(git ls-files --others --exclude-standard _posts | head -n1)
+          [ -n "$f" ] || { echo "::error::Claude did not create a post in _posts/"; exit 1; }
+          echo "file=$f" >> "$GITHUB_OUTPUT"
+          echo "Checking $f"
+          [[ "$(basename "$f")" =~ ^${{ steps.date.outputs.today }}-[a-z0-9-]+\.md$ ]] \
+            || { echo "::error::Bad filename: $f"; exit 1; }
+          head -1 "$f" | grep -qx -- '---' || { echo "::error::Missing front matter"; exit 1; }
+          for key in layout title description date tags; do
+            grep -qE "^${key}:" "$f" || { echo "::error::Front matter missing '$key'"; exit 1; }
+          done
+          echo "words=$(sed '1,/^---$/{/^---$/!d}' "$f" | wc -w)" >> "$GITHUB_OUTPUT"
+
+      - name: Test the site builds
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - name: Build PR body
+        run: |
+          {
+            echo "Draft for #${{ github.event.issue.number }} · ~${{ steps.check.outputs.words }} words"
+            echo
+            [ -f .post-summary.md ] && cat .post-summary.md
+            echo
+            echo "---"
+            echo "Comment \`@claude <change>\` on this PR to revise. Merge to publish."
+            echo
+            echo "Closes #${{ github.event.issue.number }}"
+          } > /tmp/pr-body.md
+          rm -f .post-summary.md
+          sudo rm -rf _site
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: post/issue-${{ github.event.issue.number }}
+          add-paths: _posts/**
+          commit-message: "Add post: ${{ github.event.issue.title }}"
+          title: "${{ github.event.issue.title }}"
+          body-path: /tmp/pr-body.md
+          labels: draft-post

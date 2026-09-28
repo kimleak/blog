@@ -1,0 +1,36 @@
+name: New blog post
+description: Drop an article idea — Claude drafts it and opens a PR
+title: "Post: "
+labels: ["new-post"]
+body:
+  - type: textarea
+    id: topic
+    attributes:
+      label: Topic
+      description: What is the article about?
+    validations:
+      required: true
+  - type: textarea
+    id: angle
+    attributes:
+      label: Angle
+      description: Your perspective or the story behind it
+  - type: textarea
+    id: points
+    attributes:
+      label: Key points to cover
+      placeholder: "- point one\n- point two"
+  - type: dropdown
+    id: length
+    attributes:
+      label: Length
+      options:
+        - Normal (500–700 words)
+        - Short (300–400 words)
+        - Deep dive (up to 1200 words)
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
